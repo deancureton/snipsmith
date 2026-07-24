@@ -1226,7 +1226,7 @@ snippets:
     math: true
     auto: true
 - trigger: mod
-  replacement: \pmod{1}$2
+  replacement: \pmod{$1}$2
   description: mod
   options:
     math: true
@@ -1235,13 +1235,13 @@ snippets:
     obsidian:
       priority: -1
 - trigger: pmod
-  replacement: \pmod{1}$2
+  replacement: \pmod{$1}$2
   description: pmod
   options:
     math: true
     auto: true
 - trigger: bmod
-  replacement: \bmod{1}$2
+  replacement: \bmod{$1}$2
   description: bmod
   options:
     math: true
