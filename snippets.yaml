@@ -1557,7 +1557,7 @@ snippets:
     auto: true
   priority: 2
 - trigger: int
-  replacement: '\int '
+  replacement: '\int'
   description: Integral
   options:
     math: true
