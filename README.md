@@ -2,6 +2,8 @@
 
 a simple and powerful way to manage your latex snippets for obsidian and vscode from a single source of truth
 
+![the same schrödinger equation typed in obsidian and vscode, from one snippets.yaml](assets/demo.gif)
+
 ## what is this?
 
 this project provides a unified system for managing your latex snippets. all your snippets live in a single, easy-to-read `snippets.yaml` file. a python script then compiles this file into the platform-specific formats required by obsidian-latex-suite and vscode's hypersnips extension. it's built to be flexible, allowing for platform-specific overrides, shared variables, and more.
