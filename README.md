@@ -50,7 +50,13 @@ assuming you have python 3 installed (you probably do), open your terminal and r
 make snippets
 ```
 
-this command will create a local python virtual environment, install the necessary dependencies, and generate your snippet files in the locations you specified.
+this command will create a local python virtual environment, install the necessary dependencies, and generate your snippet files in the locations you specified. a canonical copy of every generated file is also written to the `build/` directory in this repo, so you can `git diff build/` to review exactly what changed before it goes live.
+
+the build validates `snippets.yaml` first (unknown keys, invalid regexes, capture group references that don't exist, duplicate snippets, and more) and refuses to write anything if there are errors. to validate without writing any files, run
+
+```
+make check
+```
 
 ## cleaning up
 
@@ -88,6 +94,47 @@ snippets:
 - for obsidian: regex snippets include the `r` flag in options, plaintext snippets don't
 - for vscode: regex triggers are wrapped in backticks (`` `trigger` ``), plaintext triggers are not
 - plaintext triggers with spaces are automatically converted to escaped regex for vscode (since hypersnips doesn't support spaces in plaintext triggers)
+- forward slashes in regex triggers are automatically escaped for obsidian (the snippet file is parsed as javascript, where triggers are `/.../` regex literals)
+
+### capture groups in regex replacements
+
+reference regex capture groups in replacements with obsidian-latex-suite's `[[n]]` syntax (`[[0]]` is the first capture group). the build script automatically translates `[[n]]` into hypersnips' inline javascript form (`` ``rv = m[n+1]`` ``) for vscode, so one replacement works on both platforms:
+
+```yaml
+snippets:
+  - trigger: ([a-zA-Z])und
+    replacement: "\\underline{[[0]]}"
+    regex: true
+    options:
+      math: true
+```
+
+you only need a `platforms.vscode.replacement` override when the vscode version genuinely differs from a mechanical translation.
+
+### default options
+
+set options once for all snippets in the top-level `defaults` section; individual snippets (and platform overrides) merge on top and can override any default:
+
+```yaml
+defaults:
+  options:
+    auto: true
+
+snippets:
+  # inherits auto: true
+  - trigger: mk
+    replacement: $$1$
+    options:
+      text: true
+
+  # opts out (only triggers on tab)
+  - trigger: ([a-zA-Z])dot
+    replacement: "\\dot{[[0]]}"
+    regex: true
+    options:
+      math: true
+      auto: false
+```
 
 ### in-word triggering
 

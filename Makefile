@@ -7,7 +7,7 @@ VENV_PYTHON := $(VENV_DIR)/bin/python
 # list of source files that should trigger a rebuild
 SRC_FILES := build_snippets.py snippets.yaml .env
 
-.PHONY: all snippets clean help
+.PHONY: all snippets check clean help
 
 all: snippets
 
@@ -15,6 +15,11 @@ all: snippets
 snippets: $(VENV_DIR)/touchfile $(SRC_FILES)
 	@echo ">>> Building snippets..."
 	@$(VENV_PYTHON) build_snippets.py
+
+# validate snippets.yaml without writing any files
+check: $(VENV_DIR)/touchfile
+	@echo ">>> Validating snippets..."
+	@$(VENV_PYTHON) build_snippets.py --check
 
 # set up the venv
 $(VENV_DIR)/touchfile: requirements.txt
@@ -38,5 +43,6 @@ clean:
 help:
 	@echo "Available commands:"
 	@echo "  make snippets  - Install dependencies and build all snippet files."
+	@echo "  make check     - Validate snippets.yaml without writing any files."
 	@echo "  make clean     - Remove virtual environment and all generated files."
 	@echo "  make help      - Show this help message."
