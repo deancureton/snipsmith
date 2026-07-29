@@ -128,7 +128,7 @@
     { trigger: "_", replacement: "_{$1}$2", options: "mA", description: "subscript" },
     { trigger: /([A-Za-z])(\d)/, replacement: "[[0]]_{[[1]]}", options: "rmA", description: "Auto letter subscript" },
     { trigger: /([A-Za-z])_(\d\d)/, replacement: "[[0]]_{[[1]]}", options: "rmA", description: "Auto letter subscript" },
-    { trigger: /\\hat{([A-Za-z])}(\d)/, replacement: "hat{[[0]]}_{[[1]]}", options: "rmA", description: "Auto letter subscript" },
+    { trigger: /\\hat{([A-Za-z])}(\d)/, replacement: "\\hat{[[0]]}_{[[1]]}", options: "rmA", description: "Auto letter subscript" },
     { trigger: /\\mathbf{([A-Za-z])}(\d)/, replacement: "\\mathbf{[[0]]}_{[[1]]}", options: "rmA", description: "Auto letter subscript" },
     { trigger: /\\vec{([A-Za-z])}(\d)/, replacement: "\\vec{[[0]]}_{[[1]]}", options: "rmA", description: "Auto letter subscript" },
     { trigger: "(", replacement: "($1)$2", options: "mA", description: "Parentheses" },

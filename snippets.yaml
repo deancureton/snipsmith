@@ -516,45 +516,30 @@ snippets:
   description: Trigonometric function
   options:
     math: true
-  platforms:
-    vscode:
-      replacement: '``rv = m[1] + ''\''  + m[2]``'
   regex: true
 - trigger: \\(arcsin|arccos|arctan|arccot|arccsc|arcsec|sin|cos|tan|cot|csc|sec)([A-Za-gi-z])
   replacement: \[[0]] [[1]]
   description: Space after trigonometric functions
   options:
     math: true
-  platforms:
-    vscode:
-      replacement: '``rv = ''\'' + m[1] + '' '' + m[2]``'
   regex: true
 - trigger: \\(arcsinh|arccosh|arctanh|arccoth|arcsch|arcsech|sinh|cosh|tanh|coth|csch|sech)([A-Za-z])
   replacement: \[[0]] [[1]]
   description: Space after hyperbolic trigonometric functions
   options:
     math: true
-  platforms:
-    vscode:
-      replacement: '``rv = ''\'' + m[1] + '' '' + m[2]``'
   regex: true
 - trigger: \\(neq|geq|leq|gg|ll|sim)([0-9]+)
   replacement: \[[0]] [[1]]
   description: Inequality
   options:
     math: true
-  platforms:
-    vscode:
-      replacement: '``rv = ''\'' + m[1] + '' '' + m[2]``'
   regex: true
 - trigger: (CC|RR|QQ|ZZ|NN|FF|EE|PP)
   replacement: \[[0]]
   description: Common mathematical letter symbols
   options:
     math: true
-  platforms:
-    vscode:
-      replacement: '``rv = ''\'' + m[1]``'
   regex: true
 - trigger: II
   replacement: \mathbb{1}
@@ -586,9 +571,6 @@ snippets:
   description: Boldface
   options:
     math: true
-  platforms:
-    vscode:
-      replacement: '``rv = ''\mathbb{'' + m[1] + ''}''``'
   regex: true
 - trigger: ..
   replacement: \ldots
@@ -910,45 +892,30 @@ snippets:
   description: Auto letter subscript
   options:
     math: true
-  platforms:
-    vscode:
-      replacement: '``rv = m[1] + ''_{'' + m[2] + ''}''``'
   regex: true
 - trigger: ([A-Za-z])_(\d\d)
   replacement: '[[0]]_{[[1]]}'
   description: Auto letter subscript
   options:
     math: true
-  platforms:
-    vscode:
-      replacement: '``rv = m[1] + ''_{'' + m[2] + ''}''``'
   regex: true
 - trigger: \\hat{([A-Za-z])}(\d)
-  replacement: hat{[[0]]}_{[[1]]}
+  replacement: \hat{[[0]]}_{[[1]]}
   description: Auto letter subscript
   options:
     math: true
-  platforms:
-    vscode:
-      replacement: '``rv = ''\hat{'' + m[1] + ''}_{'' + m[2] + ''}''``'
   regex: true
 - trigger: \\mathbf{([A-Za-z])}(\d)
   replacement: \mathbf{[[0]]}_{[[1]]}
   description: Auto letter subscript
   options:
     math: true
-  platforms:
-    vscode:
-      replacement: '``rv = ''\mathbf{'' + m[1] + ''}_{'' + m[2] + ''}''``'
   regex: true
 - trigger: \\vec{([A-Za-z])}(\d)
   replacement: \vec{[[0]]}_{[[1]]}
   description: Auto letter subscript
   options:
     math: true
-  platforms:
-    vscode:
-      replacement: '``rv = ''\vec{'' + m[1] + ''}_{'' + m[2] + ''}''``'
   regex: true
 - trigger: ([a-zA-Z0-9])td
   replacement: '``rv = m[1] + ''^{'' + snip.tabstop(1) + ''}''``'
@@ -1403,18 +1370,12 @@ snippets:
   description: Unit vector (i, j, k)
   options:
     math: true
-  platforms:
-    vscode:
-      replacement: '``rv = ''\mathbf{'' + m[1] + ''}''``'
   regex: true
 - trigger: :(x|y|z)
   replacement: \hat{\mathbf{[[0]]}}
   description: Unit vector (x, y, z)
   options:
     math: true
-  platforms:
-    vscode:
-      replacement: '``rv = ''\hat{\mathbf{'' + m[1] + ''}}''``'
   regex: true
 - trigger: kbt
   replacement: k_{B} T
@@ -1505,11 +1466,6 @@ snippets:
   description: Add backslash before greek letters, symbols, and short symbols
   options:
     math: true
-  platforms:
-    obsidian:
-      trigger: ([^\\])(${GREEK}|${SYMBOL}|${SHORT_SYMBOL})
-    vscode:
-      replacement: '``rv = m[1] + ''\'' + m[2]``'
   regex: true
 - trigger: \\({{GREEK}}|{{SYMBOL}}|{{SHORT_SYMBOL}})([A-Za-z])
   replacement: \[[0]] [[1]]
@@ -1517,33 +1473,18 @@ snippets:
   priority: 1
   options:
     math: true
-  platforms:
-    obsidian:
-      trigger: \\(${GREEK}|${SYMBOL}|${SHORT_SYMBOL})([A-Za-z])
-    vscode:
-      replacement: '``rv = ''\'' + m[1] + '' '' + m[2]``'
   regex: true
 - trigger: \\({{GREEK}}|{{SYMBOL}}) sr
   replacement: \[[0]]^{2}
   description: Superscript 2 after greek letters and symbols
   options:
     math: true
-  platforms:
-    obsidian:
-      trigger: \\(${GREEK}|${SYMBOL}) sr
-    vscode:
-      replacement: '``rv = ''\'' + m[1] + ''^{2}''``'
   regex: true
 - trigger: \\({{GREEK}}|{{SYMBOL}}) cb
   replacement: \[[0]]^{3}
   description: Superscript 3 after greek letters and symbols
   options:
     math: true
-  platforms:
-    obsidian:
-      trigger: \\(${GREEK}|${SYMBOL}) cb
-    vscode:
-      replacement: '``rv = ''\'' + m[1] + ''^{3}''``'
   regex: true
 - trigger: \\({{GREEK}}|{{SYMBOL}}) rd
   replacement: \[[0]]^{$0}$1
@@ -1551,8 +1492,6 @@ snippets:
   options:
     math: true
   platforms:
-    obsidian:
-      trigger: \\(${GREEK}|${SYMBOL}) rd
     vscode:
       replacement: '``rv = ''\'' + m[1] + ''^{$1}$2''``'
   regex: true
@@ -1562,11 +1501,6 @@ snippets:
   description: Diacritic over greek letters and symbols
   options:
     math: true
-  platforms:
-    obsidian:
-      trigger: \\(${GREEK}|${SYMBOL}) (hat|bar|vec|tilde)
-    vscode:
-      replacement: '``rv = ''\'' + m[2] + ''{\'' + m[1] + ''}''``'
   regex: true
 - trigger: \\({{GREEK}}|{{SYMBOL}}) dot
   replacement: \dot{\[[0]]}

@@ -58,6 +58,8 @@ the build validates `snippets.yaml` first (unknown keys, invalid regexes, captur
 make check
 ```
 
+ci runs the same validation on every push and also verifies that the committed files in `build/` match a fresh build, so behavior changes can't sneak in without showing up in a reviewable diff.
+
 ## cleaning up
 
 to remove all generated files (at the paths specified in your `.env`) and the python virtual environment, simply run

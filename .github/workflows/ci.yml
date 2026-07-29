@@ -1,0 +1,33 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: install dependencies
+        run: pip install -r requirements.txt
+
+      - name: validate snippets.yaml
+        run: python build_snippets.py --check
+
+      - name: build snippets
+        run: python build_snippets.py
+
+      # the generated files in build/ are committed; if this diff is non-empty,
+      # snippets.yaml or the build script changed behavior without the
+      # regenerated outputs being committed alongside
+      - name: check committed build outputs are up to date
+        run: |
+          git add -N build
+          git diff --exit-code build
