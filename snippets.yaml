@@ -5,7 +5,7 @@
 
 # schema:
 #
-# variables: <object> (optional) a key-value store for variables that can be referenced in triggers and replacements using {{variable_name}}. the build script substitutes the values directly for vscode; for obsidian triggers it emits obsidian's native `${VAR}` format and generates a variables file.
+# variables: <object> (optional) a key-value store for variables that can be referenced in triggers and replacements using {{variable_name}}.
 #
 # defaults: <object> (optional)
 #   options: <object> default options applied to every snippet. a snippet's own
@@ -16,37 +16,38 @@
 #   - trigger: <string> the text that activates the snippet. in single quotes to prevent escape characters.
 #     regex: <boolean> (default: false) whether the trigger should be treated as a regex pattern or plaintext.
 #       in regex replacements, use [[n]] to reference capture groups ([[0]] is
-#       the first group). for vscode, [[n]] is automatically translated to an
-#       hsnips javascript block (``rv = m[n+1]``); only write a platform
-#       override when the vscode replacement genuinely differs.
+#       the first group); this works on all platforms. only write a platform
+#       override when a platform's replacement genuinely differs.
 #     replacement: <string> the content to be inserted. in double quotes to allow for escape characters.
-#       use $1, $2 for tab stops. dynamic/scripted snippets are not processed
+#       use $1, $2 for tab stops, and ${VISUAL} to wrap selected text
+#       (obsidian and neovim). dynamic/scripted snippets are not processed
 #       by the build script; put those in verbatim_snippets instead.
-#     description: <string> (optional) a short explanation of what the snippet does. no double quotes (they would corrupt the hsnips file).
-#     target_platforms: <array> (optional) a list of platforms to target (e.g., [obsidian, vscode]).
+#     description: <string> (optional) a short explanation of what the snippet does. no double quotes.
+#     target_platforms: <array> (optional) a list of platforms to target (e.g., [obsidian, vscode, neovim]).
 #       if omitted, the snippet will be generated for all platforms.
 #     priority: <number> (optional) (default: 0) the priority of the snippet. higher priority snippets triggered first.
 #     options:
 #       math: <boolean> (default: false) snippet is active only in math contexts.
-#       inline_math: <boolean> (default: false) snippet is active only in inline math contexts. obsidian only.
-#       display_math: <boolean> (default: false) snippet is active only in display math contexts. obsidian only.
+#       inline_math: <boolean> (default: false) snippet is active only in inline math contexts. obsidian and neovim.
+#       display_math: <boolean> (default: false) snippet is active only in display math contexts. obsidian and neovim.
 #       text: <boolean> (default: false) snippet is active only in non-math/text contexts.
 #       code: <boolean> (default: false) snippet is active only in code blocks. obsidian only.
 #       auto: <boolean> (default: false; set to true for this file via defaults) should the snippet trigger automatically.
-#       visual: <boolean> (default: false) for snippets that operate on selected text. obsidian only.
-#       in_word: <boolean> (default: true) allow snippet to trigger inside a word (vscode's 'i' flag). vscode only.
-#       word_boundary: <boolean> (default: false) trigger only on word boundaries (vscode's 'w' flag; obsidian's 'w' option).
-#       beginning_of_line: <boolean> (default: false) trigger only at the beginning of a line (vscode's 'b' flag). vscode only.
-#       multi_line: <boolean> (default: false) trigger on multiple lines (vscode's 'M' flag). vscode only.
+#       in_word: <boolean> (default: true) allow snippet to trigger inside a word.
+#       word_boundary: <boolean> (default: false) trigger only on word boundaries.
+#       beginning_of_line: <boolean> (default: false) trigger only at the beginning of a line. vscode and neovim.
+#       multi_line: <boolean> (default: false) trigger can match across multiple lines. vscode only.
 #     platforms: <object> (optional) platform-specific overrides.
 #       obsidian: <object> override trigger/regex/replacement/description/priority/options for obsidian.
 #       vscode: <object> override trigger/regex/replacement/description/priority/options for vscode.
+#       neovim: <object> override trigger/regex/replacement/description/priority/options for neovim.
 #
 # verbatim_snippets: <object> (optional) a key-value store for platform-specific
 #   verbatim snippets. these will be appended to the generated snippet files
 #   without any processing. use this for dynamic/scripted snippets.
 #   obsidian: <array> a list of verbatim snippets for obsidian.
 #   vscode: <array> a list of verbatim snippets for vscode.
+#   neovim: <array> a list of verbatim lua statements.
 
 variables:
   GREEK: alpha|beta|gamma|Gamma|delta|Delta|epsilon|varepsilon|zeta|eta|theta|Theta|iota|kappa|lambda|Lambda|mu|nu|omicron|xi|Xi|pi|Pi|rho|sigma|Sigma|tau|upsilon|Upsilon|varphi|phi|Phi|chi|psi|Psi|omega|Omega
@@ -78,17 +79,19 @@ snippets:
   description: Display math mode
   target_platforms:
   - vscode
+  - neovim
   options:
     text: true
 - trigger: beg
-  replacement: '\begin{$0}
+  replacement: '\begin{$1}
 
-    $1
+    $2
 
-    \end{$0}'
+    \end{$1}'
   description: Begin environment
   target_platforms:
   - obsidian
+  - neovim
   options:
     math: true
 - trigger: (pmat|bmat|Bmat|vmat|Vmat)
@@ -101,6 +104,7 @@ snippets:
   regex: true
   target_platforms:
   - obsidian
+  - neovim
   options:
     display_math: true
 - trigger: matrix
@@ -112,6 +116,7 @@ snippets:
   description: Matrix environment
   target_platforms:
   - obsidian
+  - neovim
   options:
     display_math: true
 - trigger: (pmat|bmat|Bmat|vmat|Vmat)
@@ -120,6 +125,7 @@ snippets:
   regex: true
   target_platforms:
   - obsidian
+  - neovim
   options:
     inline_math: true
 - trigger: matrix
@@ -127,6 +133,7 @@ snippets:
   description: Matrix environment
   target_platforms:
   - obsidian
+  - neovim
   options:
     inline_math: true
 - trigger: case
@@ -138,6 +145,7 @@ snippets:
   description: Case environment
   target_platforms:
   - obsidian
+  - neovim
   options:
     display_math: true
 - trigger: case
@@ -145,6 +153,7 @@ snippets:
   description: Case environment
   target_platforms:
   - obsidian
+  - neovim
   options:
     inline_math: true
 - trigger: align*
@@ -167,6 +176,7 @@ snippets:
   description: Array environment
   target_platforms:
   - obsidian
+  - neovim
   options:
     display_math: true
 - trigger: array
@@ -174,6 +184,7 @@ snippets:
   description: Array environment
   target_platforms:
   - obsidian
+  - neovim
   options:
     inline_math: true
 - trigger: box
@@ -232,8 +243,6 @@ snippets:
   priority: 2000
   options:
     math: true
-    in_word: true
-    word_boundary: true
 - trigger: vec([1-9])
   replacement: '\begin{pmatrix}
 
@@ -248,10 +257,11 @@ snippets:
     math: true
   regex: true
 - trigger: ((\d+)|(\d*)(\\)?([A-Za-z]+)((\^|_)(\{\d+\}|\d))*)/
-  replacement: \frac{``rv = m[1]``}{$1}$0
+  replacement: \frac{[[0]]}{$1}$0
   description: Fraction (no parentheses)
   target_platforms:
   - vscode
+  - neovim
   options:
     math: true
   regex: true
@@ -580,15 +590,6 @@ snippets:
 - trigger: \ldots.
   replacement: \cdots
   description: ellipsis with period
-  target_platforms:
-  - obsidian
-  options:
-    math: true
-- trigger: \ldots.
-  replacement: \cdots
-  description: ellipsis with period
-  target_platforms:
-  - vscode
   options:
     math: true
 - trigger: ooo
@@ -962,6 +963,7 @@ snippets:
   description: Left and right parentheses
   target_platforms:
   - obsidian
+  - neovim
   options:
     math: true
 - trigger: lr[
@@ -969,6 +971,7 @@ snippets:
   description: Left and right square brackets
   target_platforms:
   - obsidian
+  - neovim
   options:
     math: true
 - trigger: lr{
@@ -976,6 +979,7 @@ snippets:
   description: Left and right braces
   target_platforms:
   - obsidian
+  - neovim
   options:
     math: true
 - trigger: lr|
@@ -993,6 +997,7 @@ snippets:
   description: Visual parentheses
   target_platforms:
   - obsidian
+  - neovim
   options:
     math: true
 - trigger: '['
@@ -1000,6 +1005,7 @@ snippets:
   description: Visual square brackets
   target_platforms:
   - obsidian
+  - neovim
   options:
     math: true
 - trigger: '{'
@@ -1007,6 +1013,7 @@ snippets:
   description: Visual braces
   target_platforms:
   - obsidian
+  - neovim
   options:
     math: true
 - trigger: avg
@@ -1487,13 +1494,10 @@ snippets:
     math: true
   regex: true
 - trigger: \\({{GREEK}}|{{SYMBOL}}) rd
-  replacement: \[[0]]^{$0}$1
+  replacement: \[[0]]^{$1}$2
   description: Superscript arbitrary after greek letters and symbols
   options:
     math: true
-  platforms:
-    vscode:
-      replacement: '``rv = ''\'' + m[1] + ''^{$1}$2''``'
   regex: true
 - trigger: \\({{GREEK}}|{{SYMBOL}}) (hat|bar|vec|tilde)
   priority: 2
@@ -1538,6 +1542,7 @@ snippets:
   description: underbrace
   target_platforms:
   - obsidian
+  - neovim
   options:
     math: true
 - trigger: O
@@ -1545,6 +1550,7 @@ snippets:
   description: overbrace
   target_platforms:
   - obsidian
+  - neovim
   options:
     math: true
 - trigger: B
@@ -1552,6 +1558,7 @@ snippets:
   description: underset
   target_platforms:
   - obsidian
+  - neovim
   options:
     math: true
 - trigger: C
@@ -1559,6 +1566,7 @@ snippets:
   description: cancel
   target_platforms:
   - obsidian
+  - neovim
   options:
     math: true
 - trigger: K
@@ -1566,6 +1574,7 @@ snippets:
   description: cancelto
   target_platforms:
   - obsidian
+  - neovim
   options:
     math: true
 - trigger: S
@@ -1573,6 +1582,7 @@ snippets:
   description: sqrt
   target_platforms:
   - obsidian
+  - neovim
   options:
     math: true
 - trigger: def

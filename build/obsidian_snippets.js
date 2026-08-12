@@ -1,7 +1,7 @@
 [
     { trigger: "mk", replacement: "$$1$", options: "tA", description: "Inline math mode" },
     { trigger: "dm", replacement: "$$$1$$", options: "tAw", description: "Display math mode" },
-    { trigger: "beg", replacement: "\\begin{$0}\n$1\n\\end{$0}", options: "mA", description: "Begin environment" },
+    { trigger: "beg", replacement: "\\begin{$1}\n$2\n\\end{$1}", options: "mA", description: "Begin environment" },
     { trigger: /(pmat|bmat|Bmat|vmat|Vmat)/, replacement: "\\begin{[[0]]rix}\n$0\n\\end{[[0]]rix}", options: "rMA", description: "Matrix environment" },
     { trigger: "matrix", replacement: "\\begin{matrix}\n$0\n\\end{matrix}", options: "MA", description: "Matrix environment" },
     { trigger: /(pmat|bmat|Bmat|vmat|Vmat)/, replacement: "\\begin{[[0]]rix}$0\\end{[[0]]rix}", options: "rnA", description: "Matrix environment" },
@@ -225,7 +225,7 @@
     { trigger: /\\(${GREEK}|${SYMBOL}|${SHORT_SYMBOL})([A-Za-z])/, replacement: "\\[[0]] [[1]]", options: "rmA", description: "Insert space after greek letters and symbols", priority: 1 },
     { trigger: /\\(${GREEK}|${SYMBOL}) sr/, replacement: "\\[[0]]^{2}", options: "rmA", description: "Superscript 2 after greek letters and symbols" },
     { trigger: /\\(${GREEK}|${SYMBOL}) cb/, replacement: "\\[[0]]^{3}", options: "rmA", description: "Superscript 3 after greek letters and symbols" },
-    { trigger: /\\(${GREEK}|${SYMBOL}) rd/, replacement: "\\[[0]]^{$0}$1", options: "rmA", description: "Superscript arbitrary after greek letters and symbols" },
+    { trigger: /\\(${GREEK}|${SYMBOL}) rd/, replacement: "\\[[0]]^{$1}$2", options: "rmA", description: "Superscript arbitrary after greek letters and symbols" },
     { trigger: /\\(${GREEK}|${SYMBOL}) (hat|bar|vec|tilde)/, replacement: "\\[[1]]{\\[[0]]}", options: "rmA", description: "Diacritic over greek letters and symbols", priority: 2 },
     { trigger: /\\(${GREEK}|${SYMBOL}) dot/, replacement: "\\dot{\\[[0]]}", options: "rm", description: "Diacritic over greek letters and symbols" },
     { trigger: /\\(${GREEK}|${SYMBOL}) und/, replacement: "\\underline{\\[[0]]}", options: "rmA", description: "Underline greek letters and symbols" },

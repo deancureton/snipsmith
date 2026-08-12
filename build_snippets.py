@@ -1,11 +1,12 @@
 """
-snippet compiler for obsidian latex suite and vscode hypersnips.
+snippet compiler for obsidian latex suite, vscode hypersnips, and neovim luasnip.
 
 compiles snippets from a single yaml source of truth (snippets.yaml) into
-platform-specific formats for obsidian and vscode/cursor. supports regex and
-plaintext triggers, platform-specific overrides, shared variables, default
-options, and automatic handling of platform differences (spaces in vscode
-triggers, translating [[n]] capture groups to hsnips javascript blocks).
+platform-specific formats for obsidian, vscode/cursor, and neovim. supports
+regex and plaintext triggers, platform-specific overrides, shared variables,
+default options, and automatic handling of platform differences (spaces in
+vscode triggers, translating [[n]] capture groups to hsnips javascript blocks
+or luasnip function nodes).
 
 the yaml is validated before anything is written, so malformed snippets fail
 the build instead of silently producing broken output.
@@ -34,18 +35,22 @@ ALLOWED_OVERRIDE_KEYS = {
     'trigger', 'regex', 'replacement', 'description', 'priority', 'options',
 }
 ALLOWED_OPTION_KEYS = {
-    'math', 'inline_math', 'display_math', 'text', 'code', 'auto', 'visual',
+    'math', 'inline_math', 'display_math', 'text', 'code', 'auto',
     'in_word', 'word_boundary', 'beginning_of_line', 'multi_line',
 }
-PLATFORMS = ('obsidian', 'vscode')
+PLATFORMS = ('obsidian', 'vscode', 'neovim')
 
-# context options only the obsidian builder understands; a snippet relying on
-# these for scoping will fire unscoped in vscode
-OBSIDIAN_ONLY_CONTEXTS = {'inline_math', 'display_math', 'code', 'visual'}
+IGNORED_CONTEXTS = {
+    'vscode': {'inline_math', 'display_math', 'code'},
+    'neovim': {'code'},
+}
 
 CAPTURE_GROUP_RE = re.compile(r'\[\[(\d+)\]\]')
 VARIABLE_RE = re.compile(r'\{\{(\w+)\}\}')
 HSNIPS_MATCH_REF_RE = re.compile(r'\bm\[(\d+)\]')
+NEOVIM_TOKEN_RE = re.compile(
+    CAPTURE_GROUP_RE.pattern + r'|\$\{(\d+):([^}]*)\}|\$(\d+)|\$\{VISUAL\}'
+)
 
 
 # ---------------------------------------------------------------------------
@@ -64,7 +69,7 @@ def merge_for_platform(
 
     args:
         snippet: the raw snippet definition
-        platform: 'obsidian' or 'vscode'
+        platform: one of PLATFORMS
         default_options: global default options from the yaml 'defaults' key
 
     returns:
@@ -127,6 +132,84 @@ def translate_capture_groups(replacement: str) -> str:
     )
 
 
+def lua_quote(text: str) -> str:
+    """escape a string for embedding in a double-quoted lua string literal."""
+    escaped = (
+        text.replace('\\', '\\\\')
+        .replace('"', '\\"')
+        .replace('\t', '\\t')
+        .replace('\r', '\\r')
+        .replace('\n', '\\n')
+    )
+    return f'"{escaped}"'
+
+
+def iter_neovim_tokens(replacement: str):
+    """yield (start, end, kind, n, default) for each [[n]], $n/${n:default}, or ${VISUAL} token."""
+    for m in NEOVIM_TOKEN_RE.finditer(replacement):
+        if m.group(1) is not None:
+            yield m.start(), m.end(), 'capture', int(m.group(1)), None
+        elif m.group(0) == '${VISUAL}':
+            yield m.start(), m.end(), 'visual', None, None
+        else:
+            yield (m.start(), m.end(), 'tabstop',
+                   int(m.group(2) or m.group(4)), m.group(3))
+
+
+def _append_lua_text(nodes: List[str], text: str) -> None:
+    """append a luasnip text node for a (possibly multiline) literal."""
+    if not text:
+        return
+    lines = text.split('\n')
+    if len(lines) == 1:
+        nodes.append(f"t({lua_quote(text)})")
+    else:
+        nodes.append("t({ " + ", ".join(lua_quote(line) for line in lines) + " })")
+
+
+def lua_replacement_nodes(replacement: str) -> str:
+    """
+    translate a replacement's literals, $n tabstops, and [[n]] captures into
+    a luasnip node list.
+    """
+    nodes: List[str] = []
+    seen_stops = set()
+    pos = 0
+    for start, end, kind, n, default in iter_neovim_tokens(replacement):
+        _append_lua_text(nodes, replacement[pos:start])
+        pos = end
+        if kind == 'capture':
+            nodes.append(f"cap({n + 1})")
+        elif kind == 'visual':
+            nodes.append("vis()")
+        elif n in seen_stops:
+            nodes.append(f"rep({n})")
+        else:
+            seen_stops.add(n)
+            nodes.append(
+                f"i({n})" if default is None
+                else f"i({n}, {lua_quote(default)})"
+            )
+    _append_lua_text(nodes, replacement[pos:])
+    if not nodes:
+        nodes.append('t("")')
+    return "{ " + ", ".join(nodes) + " }"
+
+
+def matches_in_word(options: Dict[str, Any]) -> bool:
+    """whether the snippet may trigger in the middle of a word."""
+    return options.get('in_word', True) and not options.get('word_boundary')
+
+
+def emission_order(entries: List[Tuple[int, str]]) -> List[str]:
+    """
+    order (trigger length, text) entries longest-trigger-first; hsnips and
+    luasnip both fall back to definition order on priority ties, so this
+    reproduces obsidian's tie-breaking on every platform.
+    """
+    return [text for _, text in sorted(entries, key=lambda e: -e[0])]
+
+
 # ---------------------------------------------------------------------------
 # validation
 # ---------------------------------------------------------------------------
@@ -150,8 +233,11 @@ def validate(
     """
     errors: List[str] = []
     warnings: List[str] = []
-    # (platform, trigger, is_regex, context, priority) -> first index seen
+    # (platform, trigger, is_regex, context, priority, replacement) -> first
+    # index seen
     seen: Dict[Tuple, int] = {}
+    # snippet content ignoring target_platforms -> first index seen
+    seen_content: Dict[str, int] = {}
 
     def check_variable_refs(text: str, where: str) -> None:
         for var in VARIABLE_RE.findall(text):
@@ -178,6 +264,18 @@ def validate(
             if key not in ALLOWED_SNIPPET_KEYS:
                 errors.append(f"{where}: unknown key '{key}'")
         check_option_keys(snippet.get('options'), where)
+
+        content_key = json.dumps(
+            {k: v for k, v in snippet.items() if k != 'target_platforms'},
+            sort_keys=True, default=str,
+        )
+        if content_key in seen_content:
+            warnings.append(
+                f"{where}: identical to snippet #{seen_content[content_key]} "
+                f"except for target_platforms; merge them into one entry"
+            )
+        else:
+            seen_content[content_key] = i + 1
 
         target_platforms = snippet.get('target_platforms') or []
         for platform in target_platforms:
@@ -249,22 +347,78 @@ def validate(
                         f"{where}: double quote in description would corrupt "
                         f"the hsnips file"
                     )
-                # a snippet scoped only by an obsidian-only context has no
-                # context at all in vscode and would fire everywhere
-                if (
-                    any(options.get(k) for k in OBSIDIAN_ONLY_CONTEXTS)
-                    and not options.get('math')
-                    and not options.get('text')
+                if '${VISUAL}' in merged['replacement']:
+                    errors.append(
+                        f"{where}: ${{VISUAL}} is not supported for vscode; "
+                        f"exclude vscode via target_platforms"
+                    )
+            ignored = IGNORED_CONTEXTS.get(platform)
+            if (
+                ignored
+                and any(options.get(k) for k in ignored)
+                and not any(
+                    options.get(k)
+                    for k in {'math', 'inline_math', 'display_math', 'text',
+                              'code'} - ignored
+                )
+            ):
+                warnings.append(
+                    f"{where}: scoped only by options the {platform} builder "
+                    f"ignores ({', '.join(sorted(ignored))}); it will fire "
+                    f"unscoped in {platform} unless target_platforms "
+                    f"excludes it"
+                )
+
+            if platform == 'neovim':
+                replacement = merged['replacement']
+                if '``' in replacement:
+                    errors.append(
+                        f"{where}: hsnips javascript (``...``) in replacement "
+                        f"is not supported for neovim; add a platforms.neovim "
+                        f"override or exclude neovim via target_platforms"
+                    )
+                stops = [
+                    (start, n, default)
+                    for start, _, kind, n, default
+                    in iter_neovim_tokens(replacement)
+                    if kind == 'tabstop'
+                ]
+                zero_positions = [p for p, n, _ in stops if n == 0]
+                if len(zero_positions) > 1:
+                    errors.append(
+                        f"{where}: $0 appears more than once; luasnip cannot "
+                        f"mirror the final tabstop"
+                    )
+                if any(n == 0 and d is not None for _, n, d in stops):
+                    errors.append(
+                        f"{where}: ${{0:default}} is not supported for neovim "
+                        f"($0 is the final cursor position)"
+                    )
+                if zero_positions and any(
+                    n != 0 and p > zero_positions[0] for p, n, _ in stops
                 ):
                     warnings.append(
-                        f"{where}: scoped only by obsidian-only options "
-                        f"({', '.join(sorted(OBSIDIAN_ONLY_CONTEXTS))} are "
-                        f"ignored in vscode); it will fire unscoped in vscode "
-                        f"unless target_platforms excludes it"
+                        f"{where}: $0 appears before other tabstops; luasnip "
+                        f"visits $0 last (unlike obsidian, which visits it "
+                        f"first), so add a platforms.neovim override if the "
+                        f"jump order matters"
                     )
+                for _, n, default in stops:
+                    if default and ('$' in default or '{' in default
+                                    or CAPTURE_GROUP_RE.search(default)):
+                        errors.append(
+                            f"{where}: tabstop default {default!r} is too "
+                            f"complex for the neovim generator (no nested "
+                            f"tabstops, captures, or braces)"
+                        )
 
-            if platform == 'obsidian' and not is_regex and '\n' in merged_trigger:
-                errors.append(f"{where}: obsidian triggers may not contain newlines")
+            if (
+                platform in ('obsidian', 'neovim')
+                and not is_regex and '\n' in merged_trigger
+            ):
+                errors.append(
+                    f"{where}: {platform} triggers may not contain newlines"
+                )
 
             context = tuple(
                 bool(options.get(k))
@@ -332,14 +486,12 @@ def generate_obsidian_snippets(
             opts_str += 'c'
         if options.get('auto'):
             opts_str += 'A'
-        if options.get('visual'):
-            opts_str += 'v'
-        if options.get('word_boundary'):
+        if not matches_in_word(options):
             opts_str += 'w'
 
         # convert {{VAR}} syntax to obsidian's native ${VAR} variables, which
         # latex suite substitutes from the generated variables file
-        trigger = re.sub(r'\{\{(\w+)\}\}', r'${\1}', final_snippet['trigger'])
+        trigger = VARIABLE_RE.sub(r'${\1}', final_snippet['trigger'])
 
         # for regex triggers, wrap in slashes; for plaintext, use string format
         if final_snippet.get('regex', False):
@@ -403,18 +555,22 @@ def generate_latex_snippets(
     returns:
         the file content as a string
     """
+    # math() also matches vscode's markdown math scopes; notmath() stays
+    # quiet inside code (markdown fenced/inline code, latex verbatim)
     hsnips_content = (
         "global\n"
         "function math(context) {\n"
-        "    return context.scopes.findLastIndex(s => s.startsWith(\"meta.math\")) > "
+        "    return context.scopes.findLastIndex(s => s.startsWith(\"meta.math\") || s.startsWith(\"meta.embedded.math\")) > "
         "context.scopes.findLastIndex(s => s.startsWith(\"comment\") || s.startsWith(\"meta.text.normal.tex\"));\n"
         "}\n"
         "function notmath(context) {\n"
-        "    return context.scopes.findLastIndex(s => s.startsWith(\"meta.math\")) <= "
-        "context.scopes.findLastIndex(s => s.startsWith(\"comment\") || s.startsWith(\"meta.text.normal.tex\"));\n"
+        "    return !math(context) && !context.scopes.some(s => "
+        "s.startsWith(\"markup.fenced_code\") || s.startsWith(\"markup.raw\") || s.startsWith(\"markup.inline.raw\"));\n"
         "}\n"
         "endglobal\n\n"
     )
+
+    entries: List[Tuple[int, str]] = []
 
     for snippet in snippets:
         if not targets_platform(snippet, 'vscode'):
@@ -424,6 +580,7 @@ def generate_latex_snippets(
         options = final_snippet['options']
 
         trigger = substitute_variables(final_snippet['trigger'], variables)
+        trigger_length = len(trigger)
 
         replacement = substitute_variables(final_snippet['replacement'], variables)
         # translate obsidian-style [[n]] capture groups; a no-op for snippets
@@ -438,8 +595,7 @@ def generate_latex_snippets(
         flags = ""
         if options.get('auto'):
             flags += 'A'
-        # default in_word to true for better ux (allows xsr → x^{2})
-        if options.get('in_word', True):
+        if matches_in_word(options):
             flags += 'i'
         if options.get('word_boundary'):
             flags += 'w'
@@ -483,7 +639,9 @@ def generate_latex_snippets(
         snippet_str += f'{replacement}\n'
         snippet_str += 'endsnippet\n\n'
 
-        hsnips_content += snippet_str
+        entries.append((trigger_length, snippet_str))
+
+    hsnips_content += "".join(emission_order(entries))
 
     # Append verbatim snippets if any
     if verbatim_snippets.get('vscode'):
@@ -491,6 +649,246 @@ def generate_latex_snippets(
             hsnips_content += f"{s.strip()}\n\n"
 
     return hsnips_content
+
+
+NEOVIM_PRELUDE = '''\
+-- generated by snipsmith (build_snippets.py); do not edit by hand.
+
+local ls = require("luasnip")
+local s = ls.snippet
+local t = ls.text_node
+local i = ls.insert_node
+local f = ls.function_node
+local rep = require("luasnip.extras").rep
+local line_begin = require("luasnip.extras.expand_conditions").line_begin
+
+-- without jsregexp, ecma triggers silently degrade to plain-text matching;
+-- luasnip's wrapper returns false (not an error) when it is missing
+local jsregexp_ok, jsregexp = pcall(require, "luasnip.util.jsregexp")
+if not (jsregexp_ok and jsregexp) then
+  vim.schedule(function()
+    vim.notify(
+      "snipsmith: jsregexp is not installed; regex-triggered snippets will not expand."
+        .. " see luasnip's `install_jsregexp` docs.",
+      vim.log.levels.WARN
+    )
+  end)
+end
+
+local MATH_NODES = {
+  math_environment = "display",
+  inline_formula = "inline",
+  displayed_equation = "display",
+}
+
+-- a half-typed group ("$lr{$") can break the latex parse and swallow the
+-- math node into an ERROR; fall back to scanning for delimiters
+local function delimiter_zone(line_to_cursor)
+  local line = line_to_cursor:gsub("\\\\%$", "")
+  local function last(pat)
+    return line:match(".*()" .. pat) or 0
+  end
+  if last("\\\\%(") > last("\\\\%)") then
+    return "inline"
+  end
+  if last("\\\\%[") > last("\\\\%]") then
+    return "display"
+  end
+  local _, dbl = line:gsub("%$%$", "")
+  local _, dollars = line:gsub("%$", "")
+  if dbl % 2 == 1 then
+    return "display"
+  end
+  if (dollars - 2 * dbl) % 2 == 1 then
+    return "inline"
+  end
+end
+
+-- "inline", "display", or nil; vimtex when it manages the buffer, treesitter
+-- otherwise
+local function math_zone(line_to_cursor)
+  if vim.b.vimtex then
+    if vim.fn["vimtex#syntax#in_mathzone"]() ~= 1 then
+      return nil
+    end
+    local col = math.max(vim.fn.col(".") - 1, 1)
+    for _, id in ipairs(vim.fn.synstack(vim.fn.line("."), col)) do
+      local name = vim.fn.synIDattr(id, "name")
+      if name == "texMathZoneTI" or name == "texMathZoneLI" then
+        return "inline"
+      end
+    end
+    return "display"
+  end
+  local parser_ok, parser = pcall(vim.treesitter.get_parser, 0)
+  if not parser_ok or not parser then
+    return nil
+  end
+  -- reparse (with injections) so the check sees the just-typed characters
+  parser:parse(true)
+  local ok, node = pcall(vim.treesitter.get_node, { ignore_injections = false })
+  local saw_error = false
+  while ok and node do
+    local zone = MATH_NODES[node:type()]
+    if zone then
+      return zone
+    end
+    if node:type() == "latex_block" then
+      -- markdown math without the latex parser installed; $$ means display
+      local text_ok, text = pcall(vim.treesitter.get_node_text, node, 0)
+      return (text_ok and text:sub(1, 2) == "$$") and "display" or "inline"
+    end
+    saw_error = saw_error or node:type() == "ERROR"
+    node = node:parent()
+  end
+  if saw_error then
+    return delimiter_zone(line_to_cursor)
+  end
+end
+
+local function in_mathzone(line_to_cursor)
+  if vim.b.vimtex then
+    return vim.fn["vimtex#syntax#in_mathzone"]() == 1
+  end
+  return math_zone(line_to_cursor) ~= nil
+end
+
+local function in_inline_math(line_to_cursor)
+  return math_zone(line_to_cursor) == "inline"
+end
+
+local function in_display_math(line_to_cursor)
+  return math_zone(line_to_cursor) == "display"
+end
+
+local function in_text(line_to_cursor)
+  return not in_mathzone(line_to_cursor)
+end
+
+local function cond_and(...)
+  local conds = { ... }
+  return function(...)
+    for _, cond in ipairs(conds) do
+      if not cond(...) then
+        return false
+      end
+    end
+    return true
+  end
+end
+
+-- the stored selection is consumed by the next expansion, so this is only
+-- true between the store_selection_keys press and the snippet that uses it
+local function has_visual()
+  return vim.b.LUASNIP_SELECT_RAW ~= nil
+end
+
+local function vis()
+  return f(function(_, snip)
+    return snip.env.LS_SELECT_RAW
+  end)
+end
+
+local function cap(n)
+  return f(function(_, snip)
+    return snip.captures[n]
+  end)
+end
+'''
+
+
+def generate_neovim_snippets(
+    snippets: List[Dict[str, Any]],
+    variables: Dict[str, str],
+    verbatim_snippets: Dict[str, List[str]],
+    default_options: Dict[str, Any]
+) -> str:
+    """
+    generate the contents of the luasnip snippet file.
+
+    args:
+        snippets: list of snippet definitions
+        variables: dictionary of variable names to values
+        verbatim_snippets: platform-specific verbatim snippets to append
+        default_options: global default options
+
+    returns:
+        the file content as a string
+    """
+    regular: List[Tuple[int, str]] = []
+    auto: List[Tuple[int, str]] = []
+
+    for snippet in snippets:
+        if not targets_platform(snippet, 'neovim'):
+            continue
+
+        final_snippet = merge_for_platform(snippet, 'neovim', default_options)
+        options = final_snippet['options']
+        is_regex = bool(final_snippet.get('regex'))
+
+        trigger = substitute_variables(final_snippet['trigger'], variables)
+        replacement = substitute_variables(final_snippet['replacement'], variables)
+
+        context = [f"trig = {lua_quote(trigger)}"]
+        description = final_snippet.get('description', '')
+        if description:
+            context.append(f"desc = {lua_quote(description)}")
+        if is_regex:
+            # the same javascript regex dialect obsidian uses
+            context.append('trigEngine = "ecma"')
+        # regex triggers and autosnippets are noise in completion menus
+        if is_regex or options.get('auto'):
+            context.append("hidden = true")
+
+        # luasnip's default wordTrig = true blocks mid-word matching
+        if is_regex or matches_in_word(options):
+            context.append("wordTrig = false")
+
+        if 'priority' in final_snippet:
+            # luasnip priorities must be positive (default 1000); yaml
+            # priorities are offsets around 0
+            context.append(f"priority = {1000 + int(final_snippet['priority'])}")
+
+        conditions = []
+        inline = options.get('inline_math')
+        display = options.get('display_math')
+        if options.get('math') or (inline and display):
+            conditions.append('in_mathzone')
+        elif inline:
+            conditions.append('in_inline_math')
+        elif display:
+            conditions.append('in_display_math')
+        elif options.get('text'):
+            conditions.append('in_text')
+        if '${VISUAL}' in replacement:
+            conditions.append('has_visual')
+        if options.get('beginning_of_line'):
+            conditions.append('line_begin')
+        if len(conditions) == 1:
+            context.append(f"condition = {conditions[0]}")
+        elif conditions:
+            context.append(f"condition = cond_and({', '.join(conditions)})")
+
+        line = (
+            f"  s({{ {', '.join(context)} }}, "
+            f"{lua_replacement_nodes(replacement)}),"
+        )
+        (auto if options.get('auto') else regular).append((len(trigger), line))
+
+    parts = [
+        NEOVIM_PRELUDE,
+        "local snippets = {", *emission_order(regular), "}", "",
+        "local autosnippets = {", *emission_order(auto), "}",
+    ]
+
+    if verbatim_snippets.get('neovim'):
+        parts.append("")
+        for v in verbatim_snippets['neovim']:
+            parts.append(v.strip())
+
+    parts.append("")
+    parts.append("return snippets, autosnippets")
+    return "\n".join(parts) + "\n"
 
 
 # ---------------------------------------------------------------------------
@@ -542,6 +940,12 @@ def parse_paths_list(env_value: Optional[str]) -> List[Path]:
     return [resolve_path(p.strip()) for p in env_value.split(',') if p.strip()]
 
 
+def paths_from_env(name: str, default: str) -> List[Path]:
+    """resolve output paths from $<name>S (comma-separated) or $<name>."""
+    paths = parse_paths_list(os.getenv(name + 'S') or os.getenv(name))
+    return paths or [resolve_path(default)]
+
+
 def clean_files(paths: List[Path]) -> None:
     """
     delete the files at the given paths.
@@ -578,24 +982,20 @@ def main() -> None:
         os.getenv('OBSIDIAN_VARIABLES_PATH', 'obsidian_variables.json')
     )
 
-    # Support both old single path and new comma-separated list for VSCode
-    latex_paths_env = os.getenv('LATEX_SNIPPETS_PATHS') or os.getenv('LATEX_SNIPPETS_PATH')
-    latex_paths = parse_paths_list(latex_paths_env)
-
-    # Fallback to default if no paths specified
-    if not latex_paths:
-        latex_paths = [resolve_path('latex.hsnips')]
+    latex_paths = paths_from_env('LATEX_SNIPPETS_PATH', 'latex.hsnips')
+    neovim_paths = paths_from_env('NEOVIM_SNIPPETS_PATH', 'tex.lua')
 
     # Canonical, git-diffable copies of every generated file
     build_copies = {
         'obsidian_snippets': BUILD_DIR / 'obsidian_snippets.js',
         'obsidian_variables': BUILD_DIR / 'obsidian_variables.json',
         'latex': BUILD_DIR / 'latex.hsnips',
+        'neovim': BUILD_DIR / 'tex.lua',
     }
 
     # Collect all output paths for cleaning
     output_paths = (
-        [obsidian_path, obsidian_vars_path] + latex_paths
+        [obsidian_path, obsidian_vars_path] + latex_paths + neovim_paths
         + list(build_copies.values())
     )
 
@@ -638,6 +1038,9 @@ def main() -> None:
     latex_content = generate_latex_snippets(
         snippets, variables, verbatim_snippets, default_options
     )
+    neovim_content = generate_neovim_snippets(
+        snippets, variables, verbatim_snippets, default_options
+    )
 
     write_output(obsidian_path, obsidian_content)
     write_output(build_copies['obsidian_snippets'], obsidian_content)
@@ -646,6 +1049,9 @@ def main() -> None:
     for latex_path in latex_paths:
         write_output(latex_path, latex_content)
     write_output(build_copies['latex'], latex_content)
+    for neovim_path in neovim_paths:
+        write_output(neovim_path, neovim_content)
+    write_output(build_copies['neovim'], neovim_content)
 
     print("\n✓ Snippet build process completed successfully!")
 

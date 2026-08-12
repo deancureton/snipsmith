@@ -1,19 +1,20 @@
 # snipsmith
 
-a simple and powerful way to manage your latex snippets for obsidian and vscode from a single source of truth
+a simple and powerful way to manage your latex snippets for obsidian, vscode, and neovim from a single source of truth
 
 ![the same schrödinger equation typed in obsidian and vscode, from one snippets.yaml](assets/demo.gif)
 
 ## what is this?
 
-this project provides a unified system for managing your latex snippets. all your snippets live in a single, easy-to-read `snippets.yaml` file. a python script then compiles this file into the platform-specific formats required by obsidian-latex-suite and vscode's hypersnips extension. it's built to be flexible, allowing for platform-specific overrides, shared variables, and more.
+this project provides a unified system for managing your latex snippets. all your snippets live in a single, easy-to-read `snippets.yaml` file. a python script then compiles this file into the platform-specific formats required by obsidian-latex-suite, vscode's hypersnips extension, and neovim's luasnip. it's built to be flexible, allowing for platform-specific overrides, shared variables, and more.
 
 ## prerequisites
 
-this project is built around two key tools; you'll need them installed and configured to get started. if you aren't already using them both there's probably no reason to be reading this right now.
+this project is built around these tools; you'll need the ones for your editors installed and configured to get started.
 
 -   [obsidian-latex-suite](https://github.com/artisticat1/obsidian-latex-suite)
 -   [hypersnips for vscode](https://marketplace.visualstudio.com/items?itemName=draivin.hsnips)
+-   [luasnip for neovim](https://github.com/L3MON4D3/LuaSnip), with its `jsregexp` extra (see `install_jsregexp` in luasnip's readme)
 
 ## setup
 
@@ -23,13 +24,27 @@ in obsidian-latex-suite's settings:
 -   take note of the file paths you choose for both of these settings
 
 in vscode/cursor:
--   create an empty `latex.hsnips` file in your hypersnips snippets directory
--   take note of its file path
+-   create empty `latex.hsnips` and/or `markdown.hsnips` files in your hypersnips snippets directory (for `.tex` and `.md` files)
+-   take note of their file paths
+
+in neovim:
+-   pick a directory for lua snippet files (e.g. `~/.config/nvim/luasnippets/`) and load it in your config:
+
+    ```lua
+    require("luasnip").setup({
+      enable_autosnippets = true,
+      store_selection_keys = "<Tab>",
+    })
+    require("luasnip.loaders.from_lua").load({ paths = { "~/.config/nvim/luasnippets" } })
+    ```
+
+-   [vimtex](https://github.com/lervag/vimtex) is recommended for accurate math-context detection in latex files; without it the generated file falls back to treesitter
 
 now, in the `.env` file in the root of this project, fill in the absolute paths you noted in the previous step. here's what your `.env` file should look like:
 
 ```
 # .env file
+
 OBSIDIAN_SNIPPETS_PATH="/path/to/your/obsidian/snippets.js"
 OBSIDIAN_VARIABLES_PATH="/path/to/your/obsidian/variables.json"
 
@@ -38,9 +53,10 @@ LATEX_SNIPPETS_PATH="/path/to/your/latex/snippets.hsnips"
 
 # or multiple paths (for both vscode and cursor, for example):
 LATEX_SNIPPETS_PATHS="/path/to/vscode/latex.hsnips,/path/to/cursor/latex.hsnips"
-```
 
-**note:** the script supports both `LATEX_SNIPPETS_PATH` (single) and `LATEX_SNIPPETS_PATHS` (multiple, comma-separated). use whichever fits your setup.
+# neovim; filenames pick the filetype (tex.lua, markdown.lua):
+NEOVIM_SNIPPETS_PATHS="/path/to/luasnippets/tex.lua,/path/to/luasnippets/markdown.lua"
+```
 
 ## building snippets
 
@@ -100,7 +116,7 @@ snippets:
 
 ### capture groups in regex replacements
 
-reference regex capture groups in replacements with obsidian-latex-suite's `[[n]]` syntax (`[[0]]` is the first capture group). the build script automatically translates `[[n]]` into hypersnips' inline javascript form (`` ``rv = m[n+1]`` ``) for vscode, so one replacement works on both platforms:
+reference regex capture groups in replacements with obsidian-latex-suite's `[[n]]` syntax (`[[0]]` is the first capture group). the build script automatically translates `[[n]]` into hypersnips' inline javascript form (`` ``rv = m[n+1]`` ``) for vscode and into a luasnip function node (`snip.captures[n+1]`) for neovim, so one replacement works on all platforms:
 
 ```yaml
 snippets:
@@ -111,7 +127,7 @@ snippets:
       math: true
 ```
 
-you only need a `platforms.vscode.replacement` override when the vscode version genuinely differs from a mechanical translation.
+you only need a `platforms.vscode.replacement` or `platforms.neovim.replacement` override when that platform's version genuinely differs from a mechanical translation.
 
 ### default options
 
@@ -142,13 +158,17 @@ snippets:
 
 by default, snippets trigger inside words (`in_word: true`). this means `xsr` will expand to `x^{2}`, not just `x sr`. if you want a snippet to require word boundaries (only trigger after a space), set `in_word: false` in the snippet options.
 
+### visual snippets
+
+snippets with `${VISUAL}` in their replacement wrap selected text (obsidian and neovim). in obsidian, select text and type the trigger. in neovim, select text, press `<Tab>` (the `store_selection_keys` mapping from setup), then type the trigger.
+
 ### multiple output paths
 
-you can export snippets to multiple vscode/cursor instances by specifying multiple paths in `LATEX_SNIPPETS_PATHS` (comma-separated). this is useful if you use both vscode and cursor, or have multiple vscode profiles.
+you can export snippets to multiple destinations by specifying multiple paths in `LATEX_SNIPPETS_PATHS` (comma-separated): latex and markdown, both vscode and cursor, multiple vscode profiles. `NEOVIM_SNIPPETS_PATHS` works the same way (tex.lua and markdown.lua).
 
 ### platform-specific overrides
 
-each snippet can have platform-specific overrides for obsidian and vscode. this lets you customize triggers, replacements, or options per platform while keeping most of the snippet definition shared.
+each snippet can have platform-specific overrides for obsidian, vscode, and neovim. this lets you customize triggers, replacements, or options per platform while keeping most of the snippet definition shared.
 
 ### shared variables
 
