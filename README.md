@@ -116,7 +116,7 @@ snippets:
 
 ### capture groups in regex replacements
 
-reference regex capture groups in replacements with obsidian-latex-suite's `[[n]]` syntax (`[[0]]` is the first capture group). the build script automatically translates `[[n]]` into hypersnips' inline javascript form (`` ``rv = m[n+1]`` ``) for vscode and into a luasnip function node (`snip.captures[n+1]`) for neovim, so one replacement works on all platforms:
+reference regex capture groups in replacements with obsidian-latex-suite's `[[n]]` syntax (`[[0]]` is the first capture group). the build script automatically translates `[[n]]` into hypersnips' inline javascript form (` ``rv = m[n+1]`` `) for vscode and into a luasnip function node (`snip.captures[n+1]`) for neovim, so one replacement works on all platforms:
 
 ```yaml
 snippets:
