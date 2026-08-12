@@ -2,7 +2,7 @@
 
 a simple and powerful way to manage your latex snippets for obsidian, vscode, and neovim from a single source of truth
 
-![the same schrödinger equation typed in obsidian and vscode, from one snippets.yaml](assets/demo.gif)
+![the same schrödinger equation typed in obsidian, vscode, and neovim, from one snippets.yaml](assets/demo.gif)
 
 ## what is this?
 
