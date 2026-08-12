@@ -28,11 +28,12 @@ BUILD_DIR = Path("build")
 
 ALLOWED_SNIPPET_KEYS = {
     'trigger', 'regex', 'replacement', 'description', 'target_platforms',
-    'priority', 'options', 'platforms',
+    'priority', 'options', 'platforms', 'excluded_macros',
 }
 # keys a platform override is allowed to replace
 ALLOWED_OVERRIDE_KEYS = {
     'trigger', 'regex', 'replacement', 'description', 'priority', 'options',
+    'excluded_macros',
 }
 ALLOWED_OPTION_KEYS = {
     'math', 'inline_math', 'display_math', 'text', 'code', 'auto',
@@ -282,6 +283,13 @@ def validate(
             if platform not in PLATFORMS:
                 errors.append(f"{where}: unknown target platform '{platform}'")
 
+        excluded = snippet.get('excluded_macros')
+        if excluded is not None and (
+            not isinstance(excluded, list)
+            or not all(isinstance(m, str) for m in excluded)
+        ):
+            errors.append(f"{where}: excluded_macros must be a list of strings")
+
         for platform, override in (snippet.get('platforms') or {}).items():
             if platform not in PLATFORMS:
                 errors.append(f"{where}: unknown override platform '{platform}'")
@@ -508,6 +516,10 @@ def generate_obsidian_snippets(
 
         if 'priority' in final_snippet:
             line_parts.append(f"priority: {final_snippet['priority']}")
+        if final_snippet.get('excluded_macros'):
+            line_parts.append(
+                f"excludedMacros: {json.dumps(final_snippet['excluded_macros'])}"
+            )
 
         output_lines.append(f"    {{ {', '.join(line_parts)} }}")
 

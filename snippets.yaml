@@ -26,6 +26,7 @@
 #     target_platforms: <array> (optional) a list of platforms to target (e.g., [obsidian, vscode, neovim]).
 #       if omitted, the snippet will be generated for all platforms.
 #     priority: <number> (optional) (default: 0) the priority of the snippet. higher priority snippets triggered first.
+#     excluded_macros: <array> (optional) macro names (e.g. [pu, ce]) inside whose arguments the snippet won't expand. obsidian only, requires latex suite 1.11.6+.
 #     options:
 #       math: <boolean> (default: false) snippet is active only in math contexts.
 #       inline_math: <boolean> (default: false) snippet is active only in inline math contexts. obsidian and neovim.
@@ -869,9 +870,10 @@ snippets:
   description: inverse
   options:
     math: true
-- trigger: ee
+- trigger: \bee
   replacement: e^{$1}$2
   description: exponential
+  regex: true
   options:
     math: true
 - trigger: conj
@@ -887,6 +889,12 @@ snippets:
 - trigger: _
   replacement: _{$1}$2
   description: subscript
+  options:
+    math: true
+- trigger: \\({{SYMBOL}}|{{SHORT_SYMBOL}})([0-9])
+  replacement: '\[[0]] [[1]]'
+  description: Space between symbol and number
+  regex: true
   options:
     math: true
 - trigger: ([A-Za-z])(\d)
@@ -1191,6 +1199,18 @@ snippets:
   options:
     math: true
     auto: false
+- trigger: parn
+  replacement: \frac{ \partial^{${1:n}} ${2:y} }{ \partial ${3:x}^{${1:n}} } $4
+  description: N-th order partial derivative
+  options:
+    math: true
+- trigger: par([0-9])
+  replacement: \frac{ \partial^{[[0]]} ${1:y} }{ \partial ${2:x}^{[[0]]} } $3
+  description: Higher order partial derivative
+  regex: true
+  priority: 2
+  options:
+    math: true
 - trigger: pa2
   replacement: \frac{ \partial^{2} ${1:y} }{ \partial ${2:x}^{2} } $3
   description: Second partial derivative
