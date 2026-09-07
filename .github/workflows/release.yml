@@ -2,7 +2,8 @@ name: release
 
 # tag a commit `vX.Y.Z` (matching __version__) and push it: this updates the
 # formula in the tap repo, then publishes a github release. needs a
-# TAP_GITHUB_TOKEN secret with write access to deancureton/homebrew-tap.
+# TAP_GITHUB_TOKEN secret with contents write access to deancureton/homebrew-tap.
+# both steps are no-ops when already done, so a failed run can be re-run.
 on:
   push:
     tags: ["v*"]
@@ -35,10 +36,14 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add Formula/snipsmith.rb
-          git commit -m "snipsmith ${GITHUB_REF_NAME#v}"
-          git push
+          if git diff --cached --quiet; then
+            echo "formula already up to date"
+          else
+            git commit -m "snipsmith ${GITHUB_REF_NAME#v}"
+            git push
+          fi
 
       - name: create github release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" --generate-notes
+        run: gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --generate-notes
