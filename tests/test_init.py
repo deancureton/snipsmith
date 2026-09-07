@@ -242,7 +242,7 @@ def test_neovim_without_luasnip_prints_hint_and_writes_loader(
 ):
     nvim = make_nvim(fake_home)
     monkeypatch.setattr(neovim, "detect", lambda: [nvim])
-    p = prompter("", "", "", "", "")
+    p = prompter("", "", "", "", "", "")
     cfg = init.run(["neovim"], None)
     p.done()
     out = capsys.readouterr()
@@ -255,7 +255,7 @@ def test_neovim_jsregexp_build_without_toolchain(fake_home, prompter, monkeypatc
     nvim = make_nvim(fake_home, luasnip=True)
     monkeypatch.setattr(neovim, "detect", lambda: [nvim])
     monkeypatch.setattr(neovim.shutil, "which", lambda name: None)
-    p = prompter("", "", "", "", "", "")
+    p = prompter("", "", "", "", "", "", "")
     init.run(["neovim"], None)
     p.done()
     assert "c toolchain" in capsys.readouterr().err
@@ -278,10 +278,22 @@ def test_neovim_own_loader_is_rewritten_silently(fake_home, prompter, monkeypatc
     nvim = make_nvim(fake_home, luasnip=True, jsregexp=True)
     nvim.write_loader(fake_home / "old")
     monkeypatch.setattr(neovim, "detect", lambda: [nvim])
-    p = prompter("", "", "", "", "")
+    p = prompter("", "", "", "", "", "")
     init.run(["neovim"], None)
     p.done()
     assert str(nvim.default_snippets_dir) in nvim.loader_file.read_text()
+
+
+def test_neovim_loader_declined_when_user_loads_directory_themselves(
+    fake_home, prompter, monkeypatch
+):
+    nvim = make_nvim(fake_home, luasnip=True, jsregexp=True)
+    monkeypatch.setattr(neovim, "detect", lambda: [nvim])
+    p = prompter("", "", "", "~/.config/nvim/luasnippets", "", "n")
+    cfg = init.run(["neovim"], None)
+    p.done()
+    assert not nvim.loader_file.exists()
+    assert cfg.outputs["neovim"][0] == fake_home / ".config/nvim/luasnippets/tex.lua"
 
 
 def test_skip_and_only_filters(fake_home, prompter, monkeypatch):
@@ -299,3 +311,25 @@ def test_invalid_answer_reprompts(fake_home, nothing_detected, prompter, capsys)
     init.run(None, None)
     p.done()
     assert "please answer y or n" in capsys.readouterr().out
+
+
+def test_rerun_prefills_from_existing_config(fake_home, prompter, monkeypatch):
+    vault = make_vault(fake_home, plugin=True, enabled=True)
+    nvim = make_nvim(fake_home, luasnip=True, jsregexp=True)
+    monkeypatch.setattr(obsidian, "detect", lambda: [vault])
+    monkeypatch.setattr(neovim, "detect", lambda: [nvim])
+    old = Config(snippets=fake_home / "s.yaml")
+    old.snippets.write_text("snippets: []\n")
+    old.outputs["obsidian_snippets"].append(vault.path / "custom/s.js")
+    old.outputs["obsidian_variables"].append(vault.path / "custom/v.json")
+    old.outputs["neovim"].append(fake_home / ".config/nvim/luasnippets/tex.lua")
+    old.save()
+
+    p = prompter("", "", "", "", "", "", "", "n")
+    cfg = init.run(["obsidian", "neovim"], None)
+    p.done()
+    assert cfg.outputs["obsidian_snippets"] == [vault.path / "custom/s.js"]
+    assert cfg.outputs["obsidian_variables"] == [vault.path / "custom/v.json"]
+    assert cfg.outputs["neovim"][0] == fake_home / ".config/nvim/luasnippets/tex.lua"
+    assert "[custom/s.js]" in p.seen[2]
+    assert "[~/.config/nvim/luasnippets]" in p.seen[5]

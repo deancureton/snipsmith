@@ -58,6 +58,11 @@ def setup_source(existing: Config) -> Path:
         return path
 
 
+def existing_in_vault(existing: Config, name: str, vault: obsidian.Vault) -> str | None:
+    """the vault-relative name of an already-configured output inside this vault."""
+    return next((vault.relative(p) for p in existing.outputs[name] if vault.contains(p)), None)
+
+
 def ask_vault_file(vault: obsidian.Vault, label: str, default_name: str) -> Path:
     while True:
         path = expand(ui.ask(f"  {label} (relative to the vault)", default_name))
@@ -68,7 +73,7 @@ def ask_vault_file(vault: obsidian.Vault, label: str, default_name: str) -> Path
         ui.warn("  the file has to live inside the vault so obsidian can read it")
 
 
-def setup_obsidian(vaults: list[obsidian.Vault], cfg: Config) -> None:
+def setup_obsidian(vaults: list[obsidian.Vault], cfg: Config, existing: Config) -> None:
     if not vaults:
         if not ui.confirm("obsidian: no vaults were detected; add a vault by path?", default=False):
             return
@@ -78,8 +83,16 @@ def setup_obsidian(vaults: list[obsidian.Vault], cfg: Config) -> None:
     for vault in vaults:
         if not ui.confirm(f"set up latex suite in vault {ui.bold(vault.name)}?"):
             continue
-        snippets_file = ask_vault_file(vault, "snippets file", obsidian.DEFAULT_SNIPPETS)
-        variables_file = ask_vault_file(vault, "variables file", obsidian.DEFAULT_VARIABLES)
+        snippets_file = ask_vault_file(
+            vault,
+            "snippets file",
+            existing_in_vault(existing, "obsidian_snippets", vault) or obsidian.DEFAULT_SNIPPETS,
+        )
+        variables_file = ask_vault_file(
+            vault,
+            "variables file",
+            existing_in_vault(existing, "obsidian_variables", vault) or obsidian.DEFAULT_VARIABLES,
+        )
         if not vault.plugin_installed and ui.confirm(
             "  latex suite is not installed; download the latest release into this vault?"
         ):
@@ -103,7 +116,7 @@ def setup_obsidian(vaults: list[obsidian.Vault], cfg: Config) -> None:
         ui.warn("obsidian is running; restart it so latex suite picks up the new settings")
 
 
-def setup_vscode(found: list[vscode.Editor], cfg: Config) -> None:
+def setup_vscode(found: list[vscode.Editor], cfg: Config, existing: Config) -> None:
     if not found:
         ui.info("vscode: no editors detected, skipping")
         return
@@ -120,7 +133,7 @@ def setup_vscode(found: list[vscode.Editor], cfg: Config) -> None:
         ui.ok(f"  writing to {collapse(hsnips_dir)}")
 
 
-def setup_neovim(found: list[neovim.Neovim], cfg: Config) -> None:
+def setup_neovim(found: list[neovim.Neovim], cfg: Config, existing: Config) -> None:
     if not found:
         ui.info("neovim: nvim not found, skipping")
         return
@@ -136,22 +149,24 @@ def setup_neovim(found: list[neovim.Neovim], cfg: Config) -> None:
         if ui.confirm("  build it now with `make install_jsregexp`?"):
             attempt(nvim.install)
 
+    previous = existing.outputs["neovim"]
     snippets_dir = ask_path(
-        "  directory for the generated lua snippet files", nvim.default_snippets_dir
+        "  directory for the generated lua snippet files",
+        previous[0].parent if previous else nvim.default_snippets_dir,
     )
     for name in ask_files(neovim.DEFAULT_FILES, neovim.SUFFIX):
         cfg.outputs["neovim"].append(snippets_dir / name)
 
     loader = nvim.loader_file
-    if (
-        loader.exists()
-        and not nvim.loader_is_ours()
-        and not ui.confirm(
-            f"  {collapse(loader)} exists and was not written by snipsmith; overwrite it?",
-            default=False,
-        )
-    ):
-        ui.info("  add the snippets directory to your own luasnip from_lua loader instead")
+    foreign = loader.exists() and not nvim.loader_is_ours()
+    question = (
+        f"  {collapse(loader)} exists and was not written by snipsmith; overwrite it?"
+        if foreign
+        else f"  write {collapse(loader)} to load them? (say no if your config already loads that directory)"
+    )
+    if not ui.confirm(question, default=not foreign):
+        if foreign:
+            ui.info("  add the snippets directory to your own luasnip from_lua loader instead")
         return
     nvim.write_loader(snippets_dir)
     ui.ok(f"  wrote loader {collapse(loader)}")
@@ -174,7 +189,7 @@ def run(only: list[str] | None, skip: list[str] | None) -> Config:
     print()
     for platform in PLATFORMS:
         if platform in wanted:
-            SETUP[platform](found[platform], cfg)
+            SETUP[platform](found[platform], cfg, existing)
             print()
 
     ui.ok(f"saved config to {collapse(cfg.save())}")
