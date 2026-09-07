@@ -6,85 +6,50 @@ a simple and powerful way to manage your latex snippets for obsidian, vscode, an
 
 ## what is this?
 
-this project provides a unified system for managing your latex snippets. all your snippets live in a single, easy-to-read `snippets.yaml` file. a python script then compiles this file into the platform-specific formats required by obsidian-latex-suite, vscode's hypersnips extension, and neovim's luasnip. it's built to be flexible, allowing for platform-specific overrides, shared variables, and more.
+this project provides a unified system for managing your latex snippets. all your snippets live in a single, easy-to-read `snippets.yaml` file. the `snipsmith` cli then compiles this file into the platform-specific formats required by obsidian-latex-suite, vscode's hypersnips extension, and neovim's luasnip. it's built to be flexible, allowing for platform-specific overrides, shared variables, and more.
 
-## prerequisites
+## install
 
-this project is built around these tools; you'll need the ones for your editors installed and configured to get started.
+```
+brew install deancureton/tap/snipsmith
+```
 
--   [obsidian-latex-suite](https://github.com/artisticat1/obsidian-latex-suite)
--   [hypersnips for vscode](https://marketplace.visualstudio.com/items?itemName=draivin.hsnips)
--   [luasnip for neovim](https://github.com/L3MON4D3/LuaSnip), with its `jsregexp` extra (see `install_jsregexp` in luasnip's readme)
+or, with python 3.11+:
+
+```
+uv tool install git+https://github.com/deancureton/snipsmith
+```
 
 ## setup
 
-in obsidian-latex-suite's settings:
--   enable `Load snippets from file or folder`
--   enable `Load snippet variables from file or folder`
--   take note of the file paths you choose for both of these settings
-
-in vscode/cursor:
--   create empty `latex.hsnips` and/or `markdown.hsnips` files in your hypersnips snippets directory (for `.tex` and `.md` files)
--   take note of their file paths
-
-in neovim:
--   pick a directory for lua snippet files (e.g. `~/.config/nvim/luasnippets/`) and load it in your config:
-
-    ```lua
-    require("luasnip").setup({
-      enable_autosnippets = true,
-      store_selection_keys = "<Tab>",
-    })
-    require("luasnip.loaders.from_lua").load({ paths = { "~/.config/nvim/luasnippets" } })
-    ```
-
--   [vimtex](https://github.com/lervag/vimtex) is recommended for accurate math-context detection in latex files; without it the generated file falls back to treesitter
-
-now, in the `.env` file in the root of this project, fill in the absolute paths you noted in the previous step. here's what your `.env` file should look like:
-
 ```
-# .env file
-
-OBSIDIAN_SNIPPETS_PATH="/path/to/your/obsidian/snippets.js"
-OBSIDIAN_VARIABLES_PATH="/path/to/your/obsidian/variables.json"
-
-# single path (for vscode only):
-LATEX_SNIPPETS_PATH="/path/to/your/latex/snippets.hsnips"
-
-# or multiple paths (for both vscode and cursor, for example):
-LATEX_SNIPPETS_PATHS="/path/to/vscode/latex.hsnips,/path/to/cursor/latex.hsnips"
-
-# neovim; filenames pick the filetype (tex.lua, markdown.lua):
-NEOVIM_SNIPPETS_PATHS="/path/to/luasnippets/tex.lua,/path/to/luasnippets/markdown.lua"
+snipsmith init
 ```
 
-## building snippets
+this detects your obsidian vaults, vscode-family editors (vscode, cursor, vscodium, windsurf, antigravity), and neovim, then walks you through each one it finds. every prompt defaults to what it detected, so you can mostly press enter.
 
-assuming you have python 3 installed (you probably do), open your terminal and run
+for each editor it offers to install the plugin snipsmith writes snippets for, and points it at the generated files:
 
-```
-make snippets
-```
+-   **obsidian**: [latex suite](https://github.com/artisticat1/obsidian-latex-suite)
+-   **vscode / cursor**: [hypersnips](https://marketplace.visualstudio.com/items?itemName=draivin.hsnips)
+-   **neovim**: [luasnip](https://github.com/L3MON4D3/LuaSnip), plus its `jsregexp` extra, which regex triggers need. unless your config already loads snippets from a directory, it also writes a small loader to `~/.config/nvim/plugin/snipsmith.lua` that turns on autosnippets. [vimtex](https://github.com/lervag/vimtex) is recommended for accurate math-context detection in latex files; without it snipsmith falls back to treesitter
 
-this command will create a local python virtual environment, install the necessary dependencies, and generate your snippet files in the locations you specified. a canonical copy of every generated file is also written to the `build/` directory in this repo, so you can `git diff build/` to review exactly what changed before it goes live.
+it also asks where your `snippets.yaml` should live (default `~/.config/snipsmith/snippets.yaml`) and seeds it with the snippets from this repo if it doesn't exist yet. your answers are saved to `~/.config/snipsmith/config.toml`, which you can edit by hand or with `snipsmith config edit`. `snipsmith init --yes` accepts every default without prompting.
 
-the build validates `snippets.yaml` first (unknown keys, invalid regexes, capture group references that don't exist, duplicate snippets, and more) and refuses to write anything if there are errors. to validate without writing any files, run
-
-```
-make check
-```
-
-ci runs the same validation on every push and also verifies that the committed files in `build/` match a fresh build, so behavior changes can't sneak in without showing up in a reviewable diff.
-
-## cleaning up
-
-to remove all generated files (at the paths specified in your `.env`) and the python virtual environment, simply run
+## everyday use
 
 ```
-make clean
+snipsmith build     # compile snippets.yaml and write every configured output
+snipsmith edit      # open snippets.yaml in $EDITOR, then rebuild
+snipsmith watch     # rebuild whenever snippets.yaml changes
+snipsmith list sr   # show snippets matching "sr"
+snipsmith doctor    # check editors, plugins, and whether outputs are up to date
+snipsmith clean     # delete the generated files
 ```
 
-that's pretty much it, enjoy! in the existing `snippets.yaml` i've provided the snippets i actually use in my setup, if that's useful. they're a combination of the default obsidian-latex-suite snippets, snippets from [here](https://github.com/Einlar/latex_snippets/blob/master/hsnips/latex.hsnips), and my own personal snippets.
+`build` validates `snippets.yaml` first (unknown keys, invalid regexes, capture group references that don't exist, duplicate snippets, and more) and refuses to write anything if there are errors. `snipsmith build --diff` shows what would change without writing it.
+
+that's pretty much it, enjoy! the `snippets.yaml` in this repo is what i actually use, if that's useful. it's a combination of the default obsidian-latex-suite snippets, snippets from [here](https://github.com/Einlar/latex_snippets/blob/master/hsnips/latex.hsnips), and my own personal snippets.
 
 ## features
 
@@ -116,7 +81,7 @@ snippets:
 
 ### capture groups in regex replacements
 
-reference regex capture groups in replacements with obsidian-latex-suite's `[[n]]` syntax (`[[0]]` is the first capture group). the build script automatically translates `[[n]]` into hypersnips' inline javascript form (` ``rv = m[n+1]`` `) for vscode and into a luasnip function node (`snip.captures[n+1]`) for neovim, so one replacement works on all platforms:
+reference regex capture groups in replacements with obsidian-latex-suite's `[[n]]` syntax (`[[0]]` is the first capture group). snipsmith translates `[[n]]` into hypersnips' inline javascript form (` ``rv = m[n+1]`` `) for vscode and into a luasnip function node (`snip.captures[n+1]`) for neovim, so one replacement works on all platforms:
 
 ```yaml
 snippets:
@@ -164,7 +129,7 @@ snippets with `${VISUAL}` in their replacement wrap selected text (obsidian and 
 
 ### multiple output paths
 
-you can export snippets to multiple destinations by specifying multiple paths in `LATEX_SNIPPETS_PATHS` (comma-separated): latex and markdown, both vscode and cursor, multiple vscode profiles. `NEOVIM_SNIPPETS_PATHS` works the same way (tex.lua and markdown.lua).
+every platform in `config.toml` takes a list of paths, so one build can feed several vaults, both vscode and cursor, or latex and markdown at once. the file name picks the filetype for vscode (`latex.hsnips`, `markdown.hsnips`) and neovim (`tex.lua`, `markdown.lua`).
 
 ### platform-specific overrides
 
@@ -172,4 +137,4 @@ each snippet can have platform-specific overrides for obsidian, vscode, and neov
 
 ### shared variables
 
-define variables once in the `variables` section and reference them in triggers and replacements using `{{VARIABLE_NAME}}`. the build script substitutes these automatically.
+define variables once in the `variables` section and reference them in triggers and replacements using `{{VARIABLE_NAME}}`. snipsmith substitutes these automatically.

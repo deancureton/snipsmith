@@ -1,7 +1,6 @@
 # this file is the single source of truth for all snippets.
-# it's used by build_snippets.py to generate platform-specific snippet files.
-# the build script validates this file before writing anything; run
-# `make check` to validate without writing.
+# `snipsmith build` compiles it into platform-specific snippet files, after
+# validating it; run `snipsmith check` to validate without writing.
 
 # schema:
 #

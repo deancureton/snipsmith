@@ -5,29 +5,43 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.11", "3.13"]
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@v6
         with:
-          python-version: '3.12'
+          python-version: ${{ matrix.python }}
 
-      - name: install dependencies
-        run: pip install -r requirements.txt
+      - run: uv sync
+      - run: uv run ruff check src tests
+      - run: uv run ruff format --check src tests
+      - run: uv run pytest
+      - run: uv run snipsmith build snippets.yaml --out build
 
-      - name: validate snippets.yaml
-        run: python build_snippets.py --check
-
-      - name: build snippets
-        run: python build_snippets.py
-
-      # the generated files in build/ are committed; if this diff is non-empty,
-      # snippets.yaml or the build script changed behavior without the
-      # regenerated outputs being committed alongside
+      # the generated files in build/ are committed; a non-empty diff means
+      # snippets.yaml or the compiler changed behavior without the regenerated
+      # outputs being committed alongside
       - name: check committed build outputs are up to date
         run: |
           git add -N build
           git diff --exit-code build
+
+  formula:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      # brew only audits formulae inside a tap, so stage the file in a throwaway one
+      - name: audit formula
+        run: |
+          brew tap-new --no-git local/ci
+          cp Formula/snipsmith.rb "$(brew --repository local/ci)/Formula/"
+          brew style local/ci/snipsmith
+          brew audit --strict local/ci/snipsmith

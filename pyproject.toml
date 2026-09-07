@@ -1,0 +1,52 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "snipsmith"
+dynamic = ["version"]
+description = "manage your latex snippets for obsidian, vscode, and neovim from a single source of truth"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+dependencies = ["PyYAML>=6.0"]
+authors = [{ name = "Dean Cureton" }]
+keywords = ["latex", "snippets", "obsidian", "vscode", "neovim", "luasnip", "hsnips"]
+
+[project.urls]
+Homepage = "https://github.com/deancureton/snipsmith"
+
+[project.scripts]
+snipsmith = "snipsmith.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[tool.hatch.version]
+path = "src/snipsmith/__init__.py"
+
+[tool.hatch.build.targets.sdist]
+only-include = ["src", "tests", "build", "snippets.yaml"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/snipsmith"]
+
+# the starter snippets live at the repo root so they stay easy to edit; ship a
+# copy inside the package for `snipsmith init`
+[tool.hatch.build.targets.wheel.force-include]
+"snippets.yaml" = "snipsmith/data/snippets.yaml"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+force-sort-within-sections = true

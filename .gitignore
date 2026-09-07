@@ -1,0 +1,13 @@
+.env
+.venv*
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+dist/
+.DS_Store
+
+# default output locations from before the cli; kept ignored for old checkouts
+/obsidian_snippets.js
+/obsidian_variables.json
+/latex.hsnips
+/tex.lua
